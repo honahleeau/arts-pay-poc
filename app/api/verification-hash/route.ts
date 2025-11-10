@@ -19,18 +19,20 @@ export async function POST(request: NextRequest) {
     let verificationHash: string;
 
     if (cardToken) {
-      // For existing card verification: hash(cardToken)
+      // For existing card verification: hash(cardToken) only
+      // This matches: createHmac("md5", SHARED_SECRET).update(CARD_TOKEN).digest("hex")
       verificationHash = createHmac('md5', sharedSecret)
         .update(cardToken)
         .digest('hex');
-    } else if (payment) {
-      // For new card verification: hash(payment.reference:amountcurrency)
+    } else if (payment && payment.reference && payment.amount && payment.currency) {
+      // For new card verification: hash(reference:amount:currency)
+      // This matches: CryptoJS.HmacMD5([REFERENCE, AMOUNT, CURRENCY].join(':'), sharedSecret)
       verificationHash = createHmac('md5', sharedSecret)
-        .update(`${payment.reference}:${payment.amount}${payment.currency}`)
+        .update(`${payment.reference}:${payment.amount}:${payment.currency}`)
         .digest('hex');
     } else {
       return NextResponse.json(
-        { error: 'Either payment or cardToken must be provided' },
+        { error: 'Either cardToken (for existing cards) or payment object with reference, amount, and currency (for new cards) must be provided' },
         { status: 400 }
       );
     }

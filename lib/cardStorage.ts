@@ -2,12 +2,17 @@
 
 export interface SavedCard {
   token: string;
-  cardNumber: string; // Last 4 digits
-  cardBrand: string; // e.g., 'Visa', 'Mastercard'
-  expiryMonth: string;
-  expiryYear: string;
-  cardholder: string;
-  lastUsed?: string;
+  bin?: string; // e.g., "400000"
+  card_category?: string; // e.g., "Credit"
+  card_country?: string; // e.g., "United States"
+  card_expiry: string; // Format: "10/2027"
+  card_holder?: string; // e.g., "test"
+  card_issuer?: string; // e.g., "Intl Hdqtrs Center Owned"
+  card_number: string; // Format: "400000XXXXXX1000" (with XXXX masking)
+  card_subcategory?: string; // e.g., "Standard"
+  card_type?: string; // e.g., "VISA"
+  successful?: boolean;
+  lastUsed?: string; // ISO date string
 }
 
 const STORAGE_KEY = 'fatzebra_saved_cards';

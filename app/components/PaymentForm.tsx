@@ -60,7 +60,12 @@ export default function PaymentForm({ onPaymentComplete, onError }: PaymentFormP
   };
 
   // Get verification hash
-  const getVerificationHash = async (payment?: any, cardToken?: string) => {
+  // For new cards: uses REFERENCE:AMOUNT:CURRENCY format
+  // For existing cards: uses only the card token
+  const getVerificationHash = async (
+    payment: { reference: string; amount: number; currency: string } | null,
+    cardToken?: string
+  ) => {
     const response = await fetch('/api/verification-hash', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -77,6 +82,8 @@ export default function PaymentForm({ onPaymentComplete, onError }: PaymentFormP
     return `payment_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   };
 
+  console.log('amount', amount);
+  console.log('accessToken', accessToken);
   // Process payment after 3DS success
   const processPayment = async (token: string, cardholder: string) => {
     try {
@@ -87,7 +94,7 @@ export default function PaymentForm({ onPaymentComplete, onError }: PaymentFormP
         body: JSON.stringify({
           accessToken,
           amount: parseFloat(amount),
-          token,
+          token, // Card token, not access token
           cardholder,
         }),
       });
@@ -163,21 +170,23 @@ export default function PaymentForm({ onPaymentComplete, onError }: PaymentFormP
       console.log('token1', token);
       setAccessToken(token);
 
-      const verification = await getVerificationHash(null, selectedCard.token);
-      const username = process.env.NEXT_PUBLIC_FAT_ZEBRA_USERNAME || '';
-      const environment = Environment.sandbox;
-    console.log('username', username);
-    console.log('token', token);
-    console.log('verification', verification);
-    console.log('environment', environment);
-    console.log('amount', amount);
-    console.log('selectedCard', selectedCard);
-    
       const payment = {
         reference: generateReference(),
         amount: parseFloat(amount),
         currency: 'AUD',
       };
+
+      // For existing cards, verification hash uses only the card token
+      // This matches: createHmac("md5", SHARED_SECRET).update(CARD_TOKEN).digest("hex")
+      const verification = await getVerificationHash(null, selectedCard.token);
+      const username = process.env.NEXT_PUBLIC_FAT_ZEBRA_USERNAME || '';
+      const environment = Environment.sandbox;
+      console.log('username', username);
+      console.log('token', token);
+      console.log('verification', verification);
+      console.log('environment', environment);
+      console.log('amount', amount);
+      console.log('selectedCard', selectedCard);
 
       setSDKConfig({
         username,
@@ -190,17 +199,9 @@ export default function PaymentForm({ onPaymentComplete, onError }: PaymentFormP
         options: {
           sca_enabled: true,
           iframe: true,
-        //   iframe: true,
-        //   iframe_url: 'https://www.google.com',
-        //   iframe_width: '100%',
-        //   iframe_height: '700px',
-        //   iframe_style: {
-        //     width: '100%',
-        //     height: '700px',
-        //   },
         },
       });
-
+      console.log('sdkConfig', sdkConfig);
       setSDKCardToken(selectedCard.token);
       setStep('card_sdk');
     } catch (error: any) {
@@ -210,76 +211,95 @@ export default function PaymentForm({ onPaymentComplete, onError }: PaymentFormP
 
 
   // Handlers for VerifyCard (new card)
-  const newCardHandlers = {
-    [PublicEvent.TOKENIZATION_SUCCESS]: (event: CustomEvent) => {
-      const cardData = event.detail;
-      console.log('Card tokenized successfully:', cardData);
+  // const newCardHandlers = {
+  //   [PublicEvent.TOKENIZATION_SUCCESS]: (event: CustomEvent) => {
+  //     const cardData = event.detail;
+  //     console.log('Card tokenized successfully:', cardData);
       
-      // Save card to storage
-      try {
-        cardStorage.addCard({
-          token: cardData.card_token,
-          cardNumber: cardData.card_last_four || '****',
-          cardBrand: cardData.card_brand || 'Unknown',
-          expiryMonth: '**',
-          expiryYear: '**',
-          cardholder: cardData.card_holder_name || 'Customer',
-        });
-      } catch (error) {
-        console.error('Error saving card:', error);
-      }
-    },
+  //     // Save card to storage
+  //     try {
+  //       cardStorage.addCard({
+  //         token: cardData.card_token,
+  //         cardNumber: cardData.card_last_four || '****',
+  //         cardBrand: cardData.card_brand || 'Unknown',
+  //         expiryMonth: '**',
+  //         expiryYear: '**',
+  //         cardholder: cardData.card_holder_name || 'Customer',
+  //       });
+  //     } catch (error) {
+  //       console.error('Error saving card:', error);
+  //     }
+  //   },
     
-    [PublicEvent.SCA_SUCCESS]: async (event: CustomEvent) => {
-      const cardData = event.detail;
-      const cardToken = cardData.card_token;
-      const cardholder = cardData.card_holder_name || 'Customer';
+  //   [PublicEvent.SCA_SUCCESS]: async (event: CustomEvent) => {
+  //     const cardData = event.detail;
+  //     const cardToken = cardData.card_token;
+  //     const cardholder = cardData.card_holder_name || 'Customer';
       
-      console.log('3DS authentication successful:', cardData);
-      
-      // Process payment after 3DS success
-      await processPayment(cardToken, cardholder);
-    },
+  //     console.log('3DS authentication successful:', cardData);
+  //     console.log('cardToken', cardToken);
+  //     console.log('cardholder', cardholder);
+  //     // Process payment after 3DS success
+  //     // await processPayment(cardToken, cardholder);
+  //   },
     
-    [PublicEvent.SCA_ERROR]: (event: CustomEvent) => {
-      console.error('3DS error:', event.detail);
-      onError('3DS authentication failed. Please try again.');
-      setStep('card_selection');
-    },
+  //   [PublicEvent.SCA_ERROR]: (event: CustomEvent) => {
+  //     console.error('3DS error:', event.detail);
+  //     onError('3DS authentication failed. Please try again.');
+  //     setStep('card_selection');
+  //   },
     
-    [PublicEvent.TOKENIZATION_ERROR]: (event: CustomEvent) => {
-      console.error('Tokenization error:', event.detail);
-      onError('Card tokenization failed. Please try again.');
-      setStep('card_selection');
-    },
+  //   [PublicEvent.TOKENIZATION_ERROR]: (event: CustomEvent) => {
+  //     console.error('Tokenization error:', event.detail);
+  //     onError('Card tokenization failed. Please try again.');
+  //     setStep('card_selection');
+  //   },
+  // };
+
+ const [events, setEvents] = useState<Array<PublicEvent>>([]);
+
+  const addEvent = (event: any) => {
+    setEvents((prev: Array<PublicEvent>) => [...prev, event]);
   };
 
-//  const [events, setEvents] = useState<Array<PublicEvent>>([]);
+  const tokenizationSuccessful = (event: CustomEvent<any>) => {
+    console.log('tokenizationSuccessful', event);
+    console.log('tokenizationSuccessful.detail', event.detail);
+    addEvent(event);
+    // Save card to storage with all card details
+    cardStorage.addCard({
+      token: event.detail.data.token,
+      bin: event.detail.data.bin,
+      card_category: event.detail.data.card_category,
+      card_country: event.detail.data.card_country,
+      card_expiry: event.detail.data.card_expiry,
+      card_holder: event.detail.data.card_holder,
+      card_issuer: event.detail.data.card_issuer,
+      card_number: event.detail.data.card_number,
+      card_subcategory: event.detail.data.card_subcategory,
+      card_type: event.detail.data.card_type,
+      successful: event.detail.data.successful,
+    });
+    console.log('card saved to storage', event.detail.data.token);
+  };
 
-//   const addEvent = (event: any) => {
-//     setEvents((prev: Array<PublicEvent>) => [...prev, event]);
-//   };
+  const scaSuccess = (event: any) => {
+    addEvent(event);
+    console.log('scaSuccess', event);
+  };
 
-//   const tokenizationSuccessful = (event: any) => {
-//     addEvent(event);
-//   };
+  const scaError = (event: any) => {
+    addEvent(event);
+  };
 
-//   const scaSuccess = (event: any) => {
-//     addEvent(event);
-//   };
-
-//   const scaError = (event: any) => {
-//     addEvent(event);
-//   };
-
-//   // Subscribe to the particular events you wish to handle
-//   const newCardHandlers: Handlers = {
-//     [PublicEvent.FORM_VALIDATION_ERROR]: addEvent,
-//     [PublicEvent.FORM_VALIDATION_SUCCESS]: addEvent,
-//     [PublicEvent.TOKENIZATION_SUCCESS]: tokenizationSuccessful,
-//     [PublicEvent.SCA_SUCCESS]: scaSuccess,
-//     [PublicEvent.SCA_ERROR]: scaError,
-//   };
+  // Subscribe to the particular events you wish to handle
+  const newCardHandlers: Handlers = {
+    [PublicEvent.FORM_VALIDATION_ERROR]: addEvent,
+    [PublicEvent.FORM_VALIDATION_SUCCESS]: addEvent,
+    [PublicEvent.TOKENIZATION_SUCCESS]: tokenizationSuccessful,
+    [PublicEvent.SCA_SUCCESS]: scaSuccess,
+    [PublicEvent.SCA_ERROR]: scaError,
+  };
 
 
   // Handlers for VerifyExistingCard (saved card)
@@ -288,7 +308,9 @@ export default function PaymentForm({ onPaymentComplete, onError }: PaymentFormP
       console.log('3DS authentication successful for saved card:', event.detail);
       
       // Process payment with saved card token
-      await processPayment(selectedCard!.token, selectedCard!.cardholder);
+      // Use stored card_holder or get from event, fallback to 'Customer'
+      const cardholder = selectedCard!.card_holder || event.detail?.card_holder || event.detail?.data?.card_holder || 'Customer';
+      await processPayment(selectedCard!.token, cardholder);
       
       // Update last used timestamp
       cardStorage.updateLastUsed(selectedCard!.token);
@@ -316,6 +338,7 @@ export default function PaymentForm({ onPaymentComplete, onError }: PaymentFormP
   };
 
   const handleSelectSavedCard = (card: SavedCard) => {
+    console.log('handleSelectSavedCard', card.token);
     setSelectedCard(card);
   };
 

@@ -2,12 +2,35 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { accessToken, amount, token, cardholder, type } = body;
-
-    if (!accessToken || !amount || !token || !cardholder) {
+    // Parse request body
+    let body;
+    try {
+      body = await request.json();
+    } catch (parseError) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Invalid JSON in request body' },
+        { status: 400 }
+      );
+    }
+
+    const { accessToken, amount, token, cardholder } = body;
+
+    // Validate required fields
+    if (!accessToken || amount === undefined || !token || !cardholder) {
+      return NextResponse.json(
+        { 
+          error: 'Missing required fields',
+          required: ['accessToken', 'amount', 'token', 'cardholder']
+        },
+        { status: 400 }
+      );
+    }
+
+    // Validate amount is a positive number
+    const amountNum = typeof amount === 'string' ? parseFloat(amount) : amount;
+    if (isNaN(amountNum) || amountNum <= 0) {
+      return NextResponse.json(
+        { error: 'Amount must be a positive number' },
         { status: 400 }
       );
     }
@@ -16,7 +39,7 @@ export async function POST(request: NextRequest) {
 
     if (!baseUrl) {
       return NextResponse.json(
-        { error: 'Missing API base URL' },
+        { error: 'Missing API base URL in environment variables' },
         { status: 500 }
       );
     }
@@ -25,7 +48,7 @@ export async function POST(request: NextRequest) {
 
     // Create payment request
     const paymentData = {
-      amount: amount,
+      amount: amountNum,
       currency: 'AUD',
       description: 'Payment via Fat Zebra SDK',
       card_token: token,
@@ -43,7 +66,22 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify(paymentData),
     });
 
-    const data = await response.json();
+    // Handle non-JSON responses
+    let data;
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      data = await response.json();
+    } else {
+      const text = await response.text();
+      return NextResponse.json(
+        { 
+          error: 'Payment failed',
+          details: text || 'Unknown error',
+          type: 'payment_error'
+        },
+        { status: response.status }
+      );
+    }
 
     if (!response.ok) {
       return NextResponse.json(
@@ -57,10 +95,13 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(data);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Payment error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        error: 'Internal server error',
+        message: error.message || 'An unexpected error occurred'
+      },
       { status: 500 }
     );
   }

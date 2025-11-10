@@ -46,24 +46,32 @@ export default function SavedCardsList({ onSelectCard, selectedCard }: SavedCard
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className={`w-12 h-8 rounded flex items-center justify-center ${
-                card.cardBrand.toLowerCase() === 'visa' 
+                card.card_type?.toLowerCase() === 'visa' 
                   ? 'bg-blue-600 text-white'
-                  : card.cardBrand.toLowerCase() === 'mastercard'
+                  : card.card_type?.toLowerCase() === 'mastercard'
                   ? 'bg-red-500 text-white'
                   : 'bg-gray-400 text-white'
               }`}>
-                {card.cardBrand.substring(0, 1)}
+                {card.card_type?.substring(0, 1) || card.card_number?.substring(0, 1) || '•'}
               </div>
               <div>
                 <div className="font-medium text-gray-900">
-                  **** **** **** {card.cardNumber}
+                  {card.card_number}
                 </div>
-                <div className="text-sm text-gray-600">
-                  {card.cardBrand} • {card.cardholder}
-                </div>
+                {card.card_holder && (
+                  <div className="text-sm text-gray-600">
+                    {card.card_holder}
+                  </div>
+                )}
                 <div className="text-xs text-gray-500 mt-1">
-                  Expires {card.expiryMonth}/{card.expiryYear}
+                  Expires {card.card_expiry}
+                  {card.card_type && ` • ${card.card_type}`}
                 </div>
+                {card.lastUsed && (
+                  <div className="text-xs text-gray-400 mt-1">
+                    Last used: {new Date(card.lastUsed).toLocaleDateString()}
+                  </div>
+                )}
               </div>
             </div>
             <button
