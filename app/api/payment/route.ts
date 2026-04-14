@@ -13,14 +13,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { accessToken, amount, token, cardholder } = body;
+    const { accessToken, amount, token, cardholder, reference } = body;
 
     // Validate required fields
-    if (!accessToken || amount === undefined || !token || !cardholder) {
+    if (amount === undefined || !token || !cardholder) {
       return NextResponse.json(
         { 
           error: 'Missing required fields',
-          required: ['accessToken', 'amount', 'token', 'cardholder']
+          required: ['amount', 'token', 'cardholder']
         },
         { status: 400 }
       );
@@ -36,6 +36,8 @@ export async function POST(request: NextRequest) {
     }
 
     const baseUrl = process.env.FAT_ZEBRA_BASE_URL;
+    const merchantUsername = process.env.NEXT_PUBLIC_FAT_ZEBRA_USERNAME;
+    const gatewayToken = process.env.FAT_ZEBRA_TOKEN;
 
     if (!baseUrl) {
       return NextResponse.json(
@@ -44,24 +46,52 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const paymentUrl = `${baseUrl}/v1.0/payments`;
+    if (!merchantUsername) {
+      return NextResponse.json(
+        { error: 'Missing NEXT_PUBLIC_FAT_ZEBRA_USERNAME in environment variables' },
+        { status: 500 }
+      );
+    }
 
-    // Create payment request
+    if (!gatewayToken) {
+      return NextResponse.json(
+        { error: 'Missing FAT_ZEBRA_TOKEN in environment variables' },
+        { status: 500 }
+      );
+    }
+
+    const paymentUrl = `${baseUrl}/v1.0/purchases`;
+
+    const customerIp =
+      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      request.headers.get('x-real-ip') ||
+      undefined;
+
+    // Fat Zebra amount is in the smallest currency unit (cents for AUD)
+    const amountInCents = Math.round(amountNum * 100);
+    const purchaseReference =
+      typeof reference === 'string' && reference.trim()
+        ? reference.trim()
+        : `payment_${Date.now()}`;
+
+    // Create purchase request
     const paymentData = {
-      amount: amountNum,
+      amount: amountInCents,
+      reference: purchaseReference,
       currency: 'AUD',
-      description: 'Payment via Fat Zebra SDK',
       card_token: token,
-      cardholder: {
-        name: cardholder,
-      },
+      customer_ip: customerIp || '127.0.0.1',
+      card_holder: cardholder,
     };
 
+    // Fat Zebra gateway purchases endpoint expects Basic auth:
+    // base64("<merchant-username>:<merchant-token>")
+    const basicAuth = Buffer.from(`${merchantUsername}:${gatewayToken}`).toString('base64');
     const response = await fetch(paymentUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`,
+        'Authorization': `Basic ${basicAuth}`,
       },
       body: JSON.stringify(paymentData),
     });
@@ -91,6 +121,24 @@ export async function POST(request: NextRequest) {
           type: 'payment_error'
         },
         { status: response.status }
+      );
+    }
+
+    // Fat Zebra can return HTTP 200 with successful=false and errors/message
+    if (data && data.successful === false) {
+      const gatewayMessage =
+        data.message ||
+        (Array.isArray(data.errors) ? data.errors.join(', ') : undefined) ||
+        'Unknown payment gateway error';
+
+      return NextResponse.json(
+        {
+          error: 'Payment failed',
+          message: gatewayMessage,
+          details: data,
+          type: 'payment_error',
+        },
+        { status: 400 }
       );
     }
 

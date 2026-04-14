@@ -35,6 +35,7 @@ A Next.js application demonstrating Fat Zebra payment processing with 3DS authen
    FAT_ZEBRA_CLIENT_SECRET="your-client-secret"
    FAT_ZEBRA_OAUTH_URL="https://api.pmnts-sandbox.io/oauth/token"
    FAT_ZEBRA_BASE_URL="https://gateway.pmnts-sandbox.io"
+   FAT_ZEBRA_TOKEN="your-merchant-token"
    FAT_ZEBRA_SHARED_SECRET="your-shared-secret"
    NEXT_PUBLIC_FAT_ZEBRA_USERNAME="your-username"
    NEXT_PUBLIC_FAT_ZEBRA_BASE_URL="https://gateway.pmnts-sandbox.io"
@@ -81,6 +82,7 @@ The application will be available at `http://localhost:3000`
 - `FAT_ZEBRA_CLIENT_SECRET` - Your Fat Zebra client secret
 - `FAT_ZEBRA_OAUTH_URL` - OAuth endpoint URL
 - `FAT_ZEBRA_BASE_URL` - Gateway base URL
+- `FAT_ZEBRA_TOKEN` - Merchant token/API key for purchase API auth
 - `FAT_ZEBRA_SHARED_SECRET` - Shared secret for verification hash
 - `NEXT_PUBLIC_FAT_ZEBRA_USERNAME` - Username for SDK initialization
 - `NEXT_PUBLIC_FAT_ZEBRA_BASE_URL` - Public gateway base URL

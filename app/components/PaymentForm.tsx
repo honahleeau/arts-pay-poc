@@ -303,7 +303,7 @@ export default function PaymentForm({ onPaymentComplete, onError }: PaymentFormP
 
 
   // Handlers for VerifyExistingCard (saved card)
-  const savedCardHandlers = {
+  const savedCardHandlers: Handlers = {
     [PublicEvent.SCA_SUCCESS]: async (event: CustomEvent) => {
       console.log('3DS authentication successful for saved card:', event.detail);
       
